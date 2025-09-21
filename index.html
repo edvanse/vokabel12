@@ -9,8 +9,8 @@
   <meta name="theme-color" content="#0f172a"/>
   <style>
     :root{
-      --bg: #0f172a; --panel: #111827; --card: #0b1221; --muted: #94a3b8; --text: #e5e7eb;
-      --accent: #22d3ee; --accent-2:#a78bfa; --ok:#34d399; --warn:#fbbf24; --danger:#fb7185; --chip:#1f2937; --border:#1f2937; --radius:16px;
+      --bg:#0f172a; --panel:#111827; --card:#0b1221; --muted:#94a3b8; --text:#e5e7eb;
+      --accent:#22d3ee; --accent-2:#a78bfa; --ok:#34d399; --warn:#fbbf24; --danger:#fb7185; --chip:#1f2937; --border:#1f2937; --radius:16px;
     }
     html,body{height:100%}
     body{margin:0;background:linear-gradient(135deg,#0b1221,#151a2c 40%,#0f172a);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,"Apple Color Emoji","Segoe UI Emoji")}
@@ -82,6 +82,7 @@
     </header>
 
     <main>
+      <!-- ВАЖНО: вот этот контейнер дней недели -->
       <section class="week" id="weekGrid" aria-live="polite"></section>
 
       <section class="random" id="randomBox">
@@ -103,20 +104,15 @@
     (function(){
       const dayNames = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
       const fmtDate = (d)=> d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'});
-      const iso = (d)=>{
-        const y = d.getFullYear();
-        const m = String(d.getMonth()+1).padStart(2,'0');
-        const da = String(d.getDate()).padStart(2,'0');
-        return `${y}-${m}-${da}`;
-      }
+      const iso = (d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       const addDays = (d,n)=>{ const x = new Date(d); x.setDate(x.getDate()+n); x.setHours(0,0,0,0); return x; }
       const mondayOf = (d)=>{ const x = new Date(d); const wd = (x.getDay()+6)%7; x.setDate(x.getDate()-wd); x.setHours(0,0,0,0); return x; }
 
       const el = (q)=>document.querySelector(q);
       const mk = (tag, props={}, ...kids)=>{ const n=document.createElement(tag); Object.assign(n, props); kids.forEach(k=> n.append(k)); return n; }
 
-      const STORAGE_KEY = 'vokabel12_v2'; // схема с переводами
-      const LEGACY_KEY = 'vokabel12_v1';
+      const STORAGE_KEY = 'vokabel12_v2';
+      const LEGACY_KEY  = 'vokabel12_v1';
 
       function migrate(){
         const legacy = localStorage.getItem(LEGACY_KEY);
@@ -130,7 +126,7 @@
             const reviewed = old.reviewed || {};
             const v2 = { entries, reviewed, flash:false };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(v2));
-          }catch(e){ /* ignore */ }
+          }catch(e){}
         }
       }
       migrate();
@@ -146,10 +142,9 @@
 
       function getWords(dateStr){
         const raw = state.entries[dateStr]||[];
-        // нормализуем к {w,t}
         return raw.map(x => (typeof x==='string' ? {w:x, t:''} : {w:(x.w||''), t:(x.t||'')})).slice(0,3);
       }
-      function setWords(dateStr, arr){ // arr = [{w,t},{w,t},{w,t}]
+      function setWords(dateStr, arr){
         state.entries[dateStr] = arr.map(p=>({w:(p.w||'').trim(), t:(p.t||'').trim()})).filter(p=>p.w || p.t).slice(0,3);
         saveState();
       }
@@ -169,7 +164,7 @@
 
       function renderWeek(){
         el('#weekLabel').textContent = weekLabel();
-        el('#flashToggle').checked = !!state.flash;
+        const flash = !!state.flash;
         const grid = el('#weekGrid');
         grid.innerHTML='';
 
@@ -182,20 +177,20 @@
           const h = mk('h3',{}, mk('span',{textContent:dayTitle}), mk('small',{textContent:"12 слов"}));
           card.append(h);
 
-          // Новые слова (3) с переводами
+          // Новые три слова с переводами
           const news = mk('div',{className:'sect'});
           news.append(mk('h4',{textContent:'Новые 3 слова (слово + перевод)'}));
           const inputs = mk('div',{className:'inputs'});
           const current = getWords(dateStr);
-          const rows = [0,1,2].map(idx=>{
+          [0,1,2].forEach(idx=>{
             const pair = current[idx] || {w:'',t:''};
             const row = mk('div',{className:'row2'});
             const w = mk('input',{type:'text', placeholder:`Слово ${idx+1}`, value: pair.w || ''});
             const t = mk('input',{type:'text', placeholder:'Перевод/заметка', value: pair.t || ''});
             function persist(){
               const vals = Array.from(inputs.querySelectorAll('.row2')).map(row => {
-                const ins = row.querySelectorAll('input');
-                return { w: ins[0].value, t: ins[1].value };
+                const [iw,it] = row.querySelectorAll('input');
+                return { w: iw.value, t: it.value };
               });
               setWords(dateStr, vals);
               renderRandom();
@@ -203,12 +198,11 @@
             }
             w.addEventListener('change', persist); w.addEventListener('blur', persist);
             t.addEventListener('change', persist); t.addEventListener('blur', persist);
-            w.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.currentTarget.blur(); }});
-            t.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.currentTarget.blur(); }});
+            w.addEventListener('keydown', e=>{ if(e.key==='Enter') e.currentTarget.blur(); });
+            t.addEventListener('keydown', e=>{ if(e.key==='Enter') e.currentTarget.blur(); });
             row.append(w,t);
-            return row;
+            inputs.append(row);
           });
-          rows.forEach(r=>inputs.append(r));
           news.append(inputs);
           const clrRow = mk('div',{className:'row'});
           const clearBtn = mk('button',{className:'btn small', textContent:'Очистить день'});
@@ -219,29 +213,26 @@
           news.append(clrRow);
           card.append(news);
 
-          // Повторения: -1, -3, -5
+          // Повторы: вчера, 3 и 5 дней назад
           [[-1,'Вчера'],[-3,'3 дня назад'],[-5,'5 дней назад']].forEach(([off, label])=>{
             const srcDate = addDays(d,off);
             const srcISO = iso(srcDate);
             const words = getWords(srcISO);
             const offsetKey = `o${off}`;
-
             const sect = mk('div',{className:'sect'});
             sect.append(mk('h4',{innerHTML:`Повторение: <b>${label}</b> <span class="muted">(${fmtDate(srcDate)})</span>`}));
-
             const list = mk('div',{className:'list'});
             if(words.length===0){ list.append(mk('span',{className:'muted', textContent:'Нет данных'})); }
             words.forEach((p,idx)=>{
               const checked = getReviewed(dateStr, offsetKey)[idx]===true;
-              const chip = mk('span',{className:'chip'+(state.flash?' flash':''), tabIndex:0});
+              const chip = mk('span',{className:'chip'+(flash?' flash':''), tabIndex:0});
               const term = mk('span',{className:'term', textContent:p.w || '…'});
               const tr = mk('span',{className:'tr', textContent:p.t ? '— '+p.t : '— (нет перевода)'});
-              const revBtn = mk('span',{className:'reveal', textContent: state.flash ? 'Показать' : '✓'});
-              if(!state.flash) tr.classList.remove('tr');
-              if(!state.flash) chip.classList.remove('flash');
+              const revBtn = mk('span',{className:'reveal', textContent: flash ? 'Показать' : '✓'});
+              if(!flash){ tr.classList.remove('tr'); chip.classList.remove('flash'); }
               if(checked){ chip.style.opacity = .7; }
-              function toggleCheck(){
-                if(state.flash){
+              function toggle(){
+                if(flash){
                   chip.classList.toggle('revealed');
                   revBtn.textContent = chip.classList.contains('revealed') ? 'Скрыть' : 'Показать';
                 } else {
@@ -249,7 +240,7 @@
                   renderWeek();
                 }
               }
-              revBtn.addEventListener('click', toggleCheck);
+              revBtn.addEventListener('click', toggle);
               chip.append(term,tr,revBtn);
               list.append(chip);
             });
@@ -258,7 +249,10 @@
           });
 
           grid.append(card);
-        }
+        });
+
+        // синхронизируем переключатель режима карточек
+        const ft = el('#flashToggle'); if(ft) ft.checked = !!state.flash;
       }
 
       function allPairs(){
@@ -271,84 +265,72 @@
         return arr;
       }
 
-      function shuffle(array){
-        for(let i=array.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [array[i],array[j]]=[array[j],array[i]]; }
-        return array;
-      }
+      function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
       function renderRandom(){
-        const list = el('#randomList');
-        list.innerHTML='';
+        const list = el('#randomList'); list.innerHTML='';
         const items = shuffle(allPairs().slice());
-        el('#allCount').textContent = `${items.length} пар(ы)`;
+        const badge = el('#allCount'); if(badge) badge.textContent = `${items.length} пар(ы)`;
         if(items.length===0){ list.append(mk('span',{className:'muted', textContent:'Пока нет слов. Добавь новые в днях недели.'})); return; }
         items.forEach(p=>{
           const chip = mk('span',{className:'chip'+(state.flash?' flash':''), tabIndex:0});
           const term = mk('span',{className:'term', textContent:p.w || '…'});
           const tr = mk('span',{className:'tr', textContent:p.t ? '— '+p.t : '— (нет перевода)'});
           const revBtn = mk('span',{className:'reveal', textContent: state.flash ? 'Показать' : '—'});
-          if(!state.flash) tr.classList.remove('tr');
-          if(!state.flash) chip.classList.remove('flash');
-          function toggle(){ chip.classList.toggle('revealed'); revBtn.textContent = chip.classList.contains('revealed') ? 'Скрыть' : 'Показать'; }
-          revBtn.addEventListener('click', toggle);
+          if(!state.flash){ tr.classList.remove('tr'); chip.classList.remove('flash'); }
+          revBtn.addEventListener('click', ()=>{ chip.classList.toggle('revealed'); revBtn.textContent = chip.classList.contains('revealed') ? 'Скрыть' : 'Показать'; });
           chip.append(term,tr,revBtn);
           list.append(chip);
         });
       }
 
-      // Контролы
+      // Инициализация
       document.addEventListener('DOMContentLoaded', ()=>{
-        if('serviceWorker' in navigator){
-          navigator.serviceWorker.register('./sw.js').catch(()=>{});
-        }
+        if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
+        renderWeek(); renderRandom();
       });
-      el('#prevWeek').addEventListener('click', ()=>{ weekStart = addDays(weekStart,-7); renderWeek(); });
-      el('#nextWeek').addEventListener('click', ()=>{ weekStart = addDays(weekStart, 7); renderWeek(); });
-      el('#goToday').addEventListener('click', ()=>{ weekStart = mondayOf(new Date()); renderWeek(); });
-      el('#shuffleAll').addEventListener('click', renderRandom);
-      el('#flashToggle').addEventListener('change', (e)=>{ state.flash = !!e.target.checked; saveState(); renderWeek(); renderRandom(); });
-      document.addEventListener('keydown', (e)=>{ if(e.key==='r' || e.key==='R'){ renderRandom(); }});
+
+      // Контролы
+      document.addEventListener('keydown', e=>{ if(e.key==='r' || e.key==='R') renderRandom(); });
+      const prev=el('#prevWeek'), next=el('#nextWeek'), today=el('#goToday'), shuffleBtn=el('#shuffleAll'), flash=el('#flashToggle');
+      if(prev) prev.addEventListener('click', ()=>{ weekStart = addDays(weekStart,-7); renderWeek(); });
+      if(next) next.addEventListener('click', ()=>{ weekStart = addDays(weekStart, 7); renderWeek(); });
+      if(today) today.addEventListener('click', ()=>{ weekStart = mondayOf(new Date()); renderWeek(); });
+      if(shuffleBtn) shuffleBtn.addEventListener('click', renderRandom);
+      if(flash) flash.addEventListener('change', e=>{ state.flash = !!e.target.checked; saveState(); renderWeek(); renderRandom(); });
 
       // Экспорт / Импорт / Сброс
-      el('#exportBtn').addEventListener('click', ()=>{
+      const exp=el('#exportBtn'), imp=el('#importFile'), reset=el('#resetAll');
+      if(exp) exp.addEventListener('click', ()=>{
         const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
         a.download = 'vokabel12_backup_'+ new Date().toISOString().slice(0,10) + '.json';
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
       });
-      el('#importFile').addEventListener('change', (ev)=>{
-        const file = ev.target.files && ev.target.files[0];
-        if(!file) return;
+      if(imp) imp.addEventListener('change', ev=>{
+        const file = ev.target.files && ev.target.files[0]; if(!file) return;
         const reader = new FileReader();
         reader.onload = ()=>{
           try{
             const data = JSON.parse(reader.result);
-            if(!data || typeof data!=='object') throw new Error('Bad JSON');
-            if(!data.entries) data.entries={};
-            if(!data.reviewed) data.reviewed={};
-            if(typeof data.flash!=='boolean') data.flash=false;
-            state = { entries:data.entries, reviewed:data.reviewed, flash:data.flash };
-            saveState();
-            renderWeek(); renderRandom();
-            alert('Импортировано успешно.');
+            const entries  = data.entries  || {};
+            const reviewed = data.reviewed || {};
+            const flash    = typeof data.flash==='boolean' ? data.flash : false;
+            state = { entries, reviewed, flash };
+            saveState(); renderWeek(); renderRandom(); alert('Импортировано успешно.');
           }catch(err){ alert('Ошибка импорта: '+ err.message); }
           finally{ ev.target.value=''; }
         };
         reader.readAsText(file);
       });
-      el('#resetAll').addEventListener('click', ()=>{
+      if(reset) reset.addEventListener('click', ()=>{
         if(confirm('Точно удалить все данные? Отменить будет невозможно.')){
           state = { entries:{}, reviewed:{}, flash:false };
-          saveState();
-          renderWeek(); renderRandom();
+          saveState(); renderWeek(); renderRandom();
         }
       });
 
-      // Первый рендер
-      renderWeek();
-      renderRandom();
     })();
   </script>
 </body>
